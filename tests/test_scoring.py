@@ -146,10 +146,11 @@ def test_unknown_context_key_is_ignored_gracefully() -> None:
 
 # --------------------------------------------------------------- CJK tokenization
 
+
 def test_tokenize_splits_cjk_into_bigrams() -> None:
     """Chinese has no spaces, so a word regex finds nothing -- bigrams do."""
     assert tokenize("腿板掉线") == ["腿板", "板掉", "掉线"]
-    assert tokenize("好") == ["好"]                       # a lone character survives
+    assert tokenize("好") == ["好"]  # a lone character survives
     assert tokenize("retry 超时 timeout") == ["retry", "超时", "timeout"]
 
 
