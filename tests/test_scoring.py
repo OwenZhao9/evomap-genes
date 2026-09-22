@@ -142,3 +142,35 @@ def test_unknown_context_key_is_ignored_gracefully() -> None:
     with_ctx, _ = score_asset(gene, "timeout", {"totally_unknown_key": 3})
     without, _ = score_asset(gene, "timeout")
     assert with_ctx == without
+
+
+# --------------------------------------------------------------- CJK tokenization
+
+def test_tokenize_splits_cjk_into_bigrams() -> None:
+    """Chinese has no spaces, so a word regex finds nothing -- bigrams do."""
+    assert tokenize("腿板掉线") == ["腿板", "板掉", "掉线"]
+    assert tokenize("好") == ["好"]                       # a lone character survives
+    assert tokenize("retry 超时 timeout") == ["retry", "超时", "timeout"]
+
+
+def test_tokenize_keeps_document_order_across_scripts() -> None:
+    assert tokenize("alpha 中文 beta") == ["alpha", "中文", "beta"]
+
+
+def test_cjk_query_finds_cjk_asset() -> None:
+    """The regression this fixes: a Chinese query used to score every asset 0.0."""
+    hit = make_capsule(id="a", title="腿板掉线恢复步骤", trigger_signals=["关节角度全零"])
+    miss = make_capsule(id="b", title="unrelated english title", trigger_signals=["nothing"])
+    hit_score, why = score_asset(hit, "腿板掉线 关节全零")
+    miss_score, _ = score_asset(miss, "腿板掉线 关节全零")
+    assert hit_score > 0.0, why
+    assert miss_score == 0.0
+
+
+def test_cjk_and_latin_queries_are_scored_the_same_way() -> None:
+    """A title hit must outrank a body hit in Chinese too, not just in English."""
+    in_title = make_capsule(id="a", title="连接池复用", content="x" * 60)
+    in_body = make_capsule(id="b", title="无关标题", content="连接池复用" + "x" * 60)
+    title_score, _ = score_asset(in_title, "连接池复用")
+    body_score, _ = score_asset(in_body, "连接池复用")
+    assert title_score > body_score > 0.0

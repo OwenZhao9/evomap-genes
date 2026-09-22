@@ -20,6 +20,7 @@ Agent 上一次踩过的坑，下一次应该能查出来。现实里这件事�
 
 - **本地优先**：`store()` 先写 sqlite 并立即返回成功，再尝试远端；远端失败不报错，只留一个 `synced=False` 的标记，等 `sync()` 补。断网时整条链路照常工作。
 - **能解释的检索**：`search()` 返回的每条 `SearchHit` 都带一个 `why`，写清楚是标题命中、标签命中，还是 `context` 落在这条经验声明的适用区间里。不是一个说不清来历的相似度数字。
+- **中英文一视同仁**：打分用的分词器对拉丁词整词切分，对中日韩文本按 2-gram 切分（`"腿板掉线"` → `腿板 / 板掉 / 掉线`），不需要额外装分词器或词典，中文查询和英文查询走完全相同的权重逻辑。
 - **条件筛选**：一条经验可以声明「我只在 `0 <= tilt_deg <= 30` 时有效」。查询时把当前 `context` 传进来，落在区间里加分，落在区间外扣分 —— 设备翻倒的时候不该推荐一条只在直立时成立的修复。
 - **改一个文件就能换后端**：所有远端 schema 的知识都关在 `adapters.py` 的两个纯函数里。远端字段变了，改那两个函数，公开 API 一行不动。
 
@@ -304,7 +305,7 @@ EvoMap 的 [llms.txt](https://evomap.ai/llms.txt) 开头写得很清楚：读这
 | 文件 | 数量 | 覆盖 |
 |---|---|---|
 | `test_models.py` | 21 | JSON 往返（4 个结构）、`content < 50` 抛 `ValueError`、`confidence` 越界、`kind`/`outcome` 枚举、空 id、frozen、`list[str] = ()` 默认值归一化 |
-| `test_scoring.py` | 20 | token 切分、四个权重档位的相对顺序、`why` 内容、确定性、区间解析（`<=` / `>=` / `a <= x <= b` / `[lo,hi]` / `{min,max}` / `environment`）、多约束取交集、区间内加分 / 区间外扣分 / 区间外否决弱命中、开区间渲染、字符串 context、未知键不影响结果 |
+| `test_scoring.py` | 24 | token 切分（含 CJK 2-gram、跨脚本保持原文顺序）、四个权重档位的相对顺序、`why` 内容、确定性、区间解析（`<=` / `>=` / `a <= x <= b` / `[lo,hi]` / `{min,max}` / `environment`）、多约束取交集、区间内加分 / 区间外扣分 / 区间外否决弱命中、开区间渲染、字符串 context、未知键不影响结果 |
 | `test_store_sqlite.py` | 28 | 全流程 store/get/search/record/stats、同 id 覆盖、`kind` 过滤、`k` 截断、context 改变排序、重开进程后数据还在、export/import 往返一致（含字节级一致与 `synced` 标记）、幂等导入、坏数据报错、构造期参数校验 |
 | `test_remote_backend.py` | 32 | `register` 的信封 / 无鉴权 / 只注册一次 / 失败不抛 / secret 不落盘 / 只持久化 node_id；publish 的 Bearer 头与 Gene+Capsule+Event bundle、capsule 链接到 gene 的 `asset_id`；Hub 拒绝 / HTTP 429 / 非 JSON 响应都只留 `synced=False`；`sync` 的推送 / 幂等 / 未配对计数 / 失败报告；search 合并远端、kind 过滤、三种响应外形、摘要不全时补一次 detail、补不齐就丢弃并计数、远端挂了降级本地、同 id 取高分；`get` 穿透远端并缓存 |
 | `test_offline.py` | 7 | **断网时 `store()` 仍成功**（socket 层直接不可用 + DNS 失败两种）、离线 search/get/record/stats/export/import、`sync()` 报告故障不抛、网络恢复后一次 `sync()` 全部补上 |

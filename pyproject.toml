@@ -1,6 +1,6 @@
 [project]
 name = "evomap-genes"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agent experience assets (Gene / Capsule) with offline-first sqlite storage and an optional EvoMap GEP remote."
 readme = "README.md"
 requires-python = ">=3.11"

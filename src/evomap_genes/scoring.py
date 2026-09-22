@@ -14,7 +14,13 @@ from .models import Capsule, Gene
 
 __all__ = ["context_ranges", "score_asset", "tokenize"]
 
-_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+#: One pass over the text, in document order: a run of latin/digit characters,
+#: or a run of CJK characters (Chinese, kana, hangul).  CJK text has no spaces,
+#: so a word regex finds nothing in it -- those runs are split into bigrams below.
+_TOKEN_RE = re.compile(
+    r"[a-z0-9_]+|[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]+"
+)
+_CJK_START = "\u3040"
 _CMP_RE = re.compile(
     r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_.]*)\s*(?P<op><=|>=|<|>|==|=)\s*(?P<num>-?\d+(?:\.\d+)?)\s*$"
 )
@@ -39,10 +45,25 @@ _SATURATION = 6.0
 
 
 def tokenize(text: str) -> list[str]:
-    """Lower-case alphanumeric tokens of length >= 2, order preserved, deduped."""
+    """Lower-case tokens, order preserved, deduped.
+
+    Latin/digit runs become one token each, dropping single characters
+    (``"a retry"`` -> ``["retry"]``).  CJK runs have no word boundaries to split
+    on, so they become overlapping **bigrams** (``"腿板掉线"`` -> ``["腿板", "板掉",
+    "掉线"]``); a lone CJK character is kept as-is.  Bigrams are the cheapest
+    tokenization that keeps Chinese, Japanese and Korean searchable without
+    shipping a segmenter or a dictionary, and they compose with the substring
+    matching in :func:`score_asset` exactly like latin tokens do.
+    """
     seen: dict[str, None] = {}
     for tok in _TOKEN_RE.findall(text.lower()):
-        if len(tok) >= 2:
+        if tok[0] >= _CJK_START:
+            if len(tok) == 1:
+                seen.setdefault(tok, None)
+            else:
+                for i in range(len(tok) - 1):
+                    seen.setdefault(tok[i : i + 2], None)
+        elif len(tok) >= 2:
             seen.setdefault(tok, None)
     return list(seen)
 
